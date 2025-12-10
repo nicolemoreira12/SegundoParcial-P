@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  rabbitmq:
+    image: rabbitmq:3.11-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"   # AMQP protocol
+      - "15672:15672" # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - microservices-network
+
+  postgres-product:
+    image: postgres:17
+    container_name: postgres-product
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: pguser
+      POSTGRES_PASSWORD: pgpass
+      POSTGRES_DB: product_db
+    volumes:
+      - postgres_product_data:/var/lib/postgresql/data
+    networks:
+      - microservices-network
+
+  postgres-order:
+    image: postgres:17
+    container_name: postgres-order
+    ports:
+      - "5434:5432"
+    environment:
+      POSTGRES_USER: pguser
+      POSTGRES_PASSWORD: pgpass
+      POSTGRES_DB: order_db
+    volumes:
+      - postgres_order_data:/var/lib/postgresql/data
+    networks:
+      - microservices-network
+
+volumes:
+  rabbitmq_data:
+  postgres_product_data:
+  postgres_order_data:
+
+networks:
+  microservices-network:
+    driver: bridge
