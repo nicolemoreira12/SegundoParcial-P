@@ -3,11 +3,13 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ProductModule } from './product/product.module';
 import { OrderModule } from './order/order.module';
+import { WebhookModule } from './webhook/webhook.module';
 
 @Module({
   imports: [
     ProductModule,
     OrderModule,
+    WebhookModule,
   ],
   controllers: [AppController],
   providers: [AppService],

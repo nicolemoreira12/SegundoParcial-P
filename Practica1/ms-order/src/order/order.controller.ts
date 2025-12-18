@@ -6,14 +6,17 @@ import {
   RmqContext,
   ClientProxy,
 } from '@nestjs/microservices';
+import { v4 as uuidv4 } from 'uuid';
 import { IdempotencyGuard } from '../idempotency/idempotency.guard';
 import { OrderService } from './order.service';
+import { WebhookPublisherService } from '../webhook/webhook.publisher.service';
 
 @Controller('orders')
 export class OrderController {
   constructor(
     private readonly idempotencyGuard: IdempotencyGuard,
     private readonly orderService: OrderService,
+    private readonly webhookPublisher: WebhookPublisherService,
     @Inject('PRODUCT_SERVICE') private readonly client: ClientProxy,
   ) {}
 
@@ -48,7 +51,24 @@ export class OrderController {
           orderId: order.idOrden,
         });
 
-        console.log('✅ Orden creada y evento emitido a ms-product');
+        // 🔔 PUBLICAR WEBHOOK a todos los suscriptores
+        await this.webhookPublisher.publishEvent({
+          event_id: uuidv4(),
+          event_type: 'order.created',
+          timestamp: new Date().toISOString(),
+          idempotency_key: payload.message_id,
+          payload: {
+            order_id: order.idOrden,
+            product_id: payload.data.idProducto,
+            quantity: payload.data.cantidad,
+            total: payload.data.total,
+            user_id: payload.data.idUsuario,
+            status: order.estado,
+            created_at: order.fechaOrden,
+          },
+        });
+
+        console.log('✅ Orden creada, evento emitido y webhook publicado');
       });
 
       // Confirmar mensaje (ACK)
