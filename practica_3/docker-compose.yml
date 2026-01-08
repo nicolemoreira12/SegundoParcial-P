@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  # Backend NestJS + TypeORM + SQLite
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: backend
+    ports:
+      - "3002:3002"
+    environment:
+      - PORT=3002
+      - DATABASE_PATH=/app/database.sqlite
+    volumes:
+      - ./backend/database.sqlite:/app/database.sqlite
+    networks:
+      - mcp-network
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:3002/productos" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # MCP Server con JSON-RPC 2.0
+  mcp-server:
+    build:
+      context: ./mcp-server
+      dockerfile: Dockerfile
+    container_name: mcp-server
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - BACKEND_URL=http://backend:3002
+    depends_on:
+      - backend
+    networks:
+      - mcp-network
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:3001/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # API Gateway + Gemini AI
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: api-gateway
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - MCP_SERVER_URL=http://mcp-server:3001
+    depends_on:
+      - mcp-server
+      - backend
+    networks:
+      - mcp-network
+    restart: unless-stopped
+
+networks:
+  mcp-network:
+    driver: bridge
