@@ -1,0 +1,94 @@
+version: '3.8'
+
+services:
+  # Backend NestJS + TypeORM + SQLite + Webhook Emitter
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: backend
+    ports:
+      - "3002:3002"
+    environment:
+      - PORT=3002
+      - DATABASE_PATH=/app/database.sqlite
+      - N8N_WEBHOOK_URL=http://n8n:5678/webhook/eventos
+    volumes:
+      - ./backend/database.sqlite:/app/database.sqlite
+    networks:
+      - practica4-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3002/productos"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    depends_on:
+      - n8n
+
+  # MCP Server con JSON-RPC 2.0
+  mcp-server:
+    build:
+      context: ./mcp-server
+      dockerfile: Dockerfile
+    container_name: mcp-server
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - BACKEND_URL=http://backend:3002
+    depends_on:
+      - backend
+    networks:
+      - practica4-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # API Gateway + Gemini AI
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: api-gateway
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - MCP_SERVER_URL=http://mcp-server:3001
+    depends_on:
+      - mcp-server
+      - backend
+    networks:
+      - practica4-network
+    restart: unless-stopped
+
+  # n8n - Plataforma de Automatización
+  n8n:
+    image: n8nio/n8n
+    container_name: n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=admin
+      - N8N_BASIC_AUTH_PASSWORD=uleam2025
+      - WEBHOOK_URL=http://n8n:5678/
+      - GENERIC_TIMEZONE=America/Guayaquil
+      - TZ=America/Guayaquil
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - practica4-network
+
+networks:
+  practica4-network:
+    driver: bridge
+
+volumes:
+  n8n_data:

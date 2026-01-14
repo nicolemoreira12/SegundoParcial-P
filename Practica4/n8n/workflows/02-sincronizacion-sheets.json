@@ -1,0 +1,149 @@
+{
+  "name": "02 - Sincronización Google Sheets",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sync-sheets",
+        "options": {}
+      },
+      "id": "webhook-sync",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "fechaHora",
+              "value": "={{ $now.format('yyyy-MM-dd HH:mm:ss') }}"
+            },
+            {
+              "name": "tipoEvento",
+              "value": "={{ $json.evento }}"
+            },
+            {
+              "name": "idRegistro",
+              "value": "={{ $json.data.orden?.idOrden || $json.data.producto?.idProducto || $json.data.idProducto || 'N/A' }}"
+            },
+            {
+              "name": "descripcion",
+              "value": "={{ $json.data.mensaje }}"
+            },
+            {
+              "name": "usuario",
+              "value": "={{ $json.data.cliente?.nombre || $json.data.orden?.nombreCliente || 'Sistema' }}"
+            },
+            {
+              "name": "estado",
+              "value": "={{ $json.data.orden?.estado || $json.data.accion || 'Procesado' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-transform",
+      "name": "Transformar Datos",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "CONFIGURAR_ID_DOCUMENTO",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Eventos",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Fecha/Hora": "={{ $json.fechaHora }}",
+            "Tipo de Evento": "={{ $json.tipoEvento }}",
+            "ID Registro": "={{ $json.idRegistro }}",
+            "Descripción": "={{ $json.descripcion }}",
+            "Usuario": "={{ $json.usuario }}",
+            "Estado": "={{ $json.estado }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "sheets-append",
+      "name": "Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [650, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "CONFIGURAR",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"message\": \"Registro añadido a Google Sheets\",\n  \"evento\": \"{{ $json.tipoEvento }}\",\n  \"timestamp\": \"{{ $now.toISO() }}\"\n}",
+        "options": {}
+      },
+      "id": "respond-ok",
+      "name": "Respuesta OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [850, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Transformar Datos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transformar Datos": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets": {
+      "main": [
+        [
+          {
+            "node": "Respuesta OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "Taller4-Sincronizacion"
+    }
+  ]
+}

@@ -1,0 +1,313 @@
+{
+  "name": "03 - Alertas de Condiciones Críticas",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "alertas",
+        "options": {}
+      },
+      "id": "webhook-alertas",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.evento }}",
+              "operation": "contains",
+              "value2": "stock_bajo"
+            }
+          ]
+        }
+      },
+      "id": "if-critico",
+      "name": "¿Es Crítico?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [\n    {\n      \"parts\": [\n        {\n          \"text\": \"Analiza esta situación de inventario y determina el nivel de urgencia (alta, media, baja). Producto: {{ $json.data.producto.nombreProducto }}. Stock actual: {{ $json.data.stockActual }}. Responde SOLO con un JSON: {\\\"urgencia\\\": \\\"alta|media|baja\\\", \\\"recomendacion\\\": \\\"texto corto\\\"}\"\n        }\n      ]\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "gemini-analizar",
+      "name": "Gemini Analizar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [650, 200],
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "CONFIGURAR",
+          "name": "Gemini API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "analisisIA",
+              "value": "={{ $json.candidates[0].content.parts[0].text }}"
+            },
+            {
+              "name": "producto",
+              "value": "={{ $('Webhook').item.json.data.producto.nombreProducto }}"
+            },
+            {
+              "name": "stock",
+              "value": "={{ $('Webhook').item.json.data.stockActual }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-preparar",
+      "name": "Preparar Análisis",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [850, 200]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ JSON.parse($json.analisisIA).urgencia }}",
+        "rules": {
+          "rules": [
+            {
+              "value": "alta",
+              "outputKey": "Alta"
+            },
+            {
+              "value": "media",
+              "outputKey": "Media"
+            },
+            {
+              "value": "baja",
+              "outputKey": "Baja"
+            }
+          ]
+        }
+      },
+      "id": "switch-urgencia",
+      "name": "Switch Urgencia",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 2,
+      "position": [1050, 200]
+    },
+    {
+      "parameters": {
+        "chatId": "CONFIGURAR_TU_CHAT_ID",
+        "text": "=🚨 *ALERTA URGENTE - STOCK CRÍTICO*\n\n📦 Producto: {{ $json.producto }}\n📊 Stock: {{ $json.stock }} unidades\n⚠️ Urgencia: ALTA\n\n💡 Recomendación: {{ JSON.parse($json.analisisIA).recomendacion }}\n\n_Acción inmediata requerida_",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "telegram-alta",
+      "name": "Telegram Alta",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [1250, 100],
+      "credentials": {
+        "telegramApi": {
+          "id": "CONFIGURAR",
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "tu-email@gmail.com",
+        "toEmail": "admin@empresa.com",
+        "subject": "=⚠️ Alerta Media: Stock bajo en {{ $json.producto }}",
+        "text": "=Alerta de Stock\n\nProducto: {{ $json.producto }}\nStock actual: {{ $json.stock }} unidades\nUrgencia: MEDIA\n\nRecomendación: {{ JSON.parse($json.analisisIA).recomendacion }}\n\nEste es un mensaje automático del sistema de inventario.",
+        "options": {}
+      },
+      "id": "email-media",
+      "name": "Email Media",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [1250, 250],
+      "credentials": {
+        "smtp": {
+          "id": "CONFIGURAR",
+          "name": "SMTP Gmail"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "log",
+              "value": "=[LOG] {{ $now.format('yyyy-MM-dd HH:mm:ss') }} - Alerta baja: {{ $json.producto }} - Stock: {{ $json.stock }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "log-baja",
+      "name": "Log Baja",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [1250, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"urgencia\": \"{{ JSON.parse($json.analisisIA).urgencia }}\",\n  \"accion\": \"Alerta procesada según urgencia\",\n  \"timestamp\": \"{{ $now.toISO() }}\"\n}",
+        "options": {}
+      },
+      "id": "respond-critico",
+      "name": "Respuesta Crítico",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1450, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"message\": \"Evento no crítico - Solo registrado\",\n  \"evento\": \"{{ $json.evento }}\"\n}",
+        "options": {}
+      },
+      "id": "respond-normal",
+      "name": "Respuesta Normal",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [650, 400]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "¿Es Crítico?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Es Crítico?": {
+      "main": [
+        [
+          {
+            "node": "Gemini Analizar",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respuesta Normal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Analizar": {
+      "main": [
+        [
+          {
+            "node": "Preparar Análisis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Análisis": {
+      "main": [
+        [
+          {
+            "node": "Switch Urgencia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch Urgencia": {
+      "main": [
+        [
+          {
+            "node": "Telegram Alta",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Email Media",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Baja",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Alta": {
+      "main": [
+        [
+          {
+            "node": "Respuesta Crítico",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Media": {
+      "main": [
+        [
+          {
+            "node": "Respuesta Crítico",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Baja": {
+      "main": [
+        [
+          {
+            "node": "Respuesta Crítico",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "Taller4-Alertas"
+    }
+  ]
+}
